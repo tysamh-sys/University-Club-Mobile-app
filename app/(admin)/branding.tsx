@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -25,6 +26,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
+import api from '../../services/api';
 import Animated, { 
   FadeInUp, 
   FadeOut, 
@@ -44,7 +46,7 @@ const { width } = Dimensions.get('window');
 interface GeneratedContent {
   instagram: string;
   email: string;
-  hooks: string[];
+  color_palette: string[];
 }
 
 export default function LiaisonAgent() {
@@ -54,25 +56,26 @@ export default function LiaisonAgent() {
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) return;
     
     setIsGenerating(true);
     setContent(null);
 
-    // Simulate AI Generation
-    setTimeout(() => {
+    try {
+      const response = await api.post('/ai/liaison', { event: prompt });
+      const { data } = response.data;
       setContent({
-        instagram: `🚀 Exciting news! We're launching our next ${prompt} soon! 💡\n\nGet ready for an immersive experience where innovation meets community. Whether you're looking to network or level up your skills, this is the place to be.\n\n✨ Exclusive insights\n🤝 High-level networking\n🎯 Hands-on workshops\n\nLink in bio to secure your spot! #VitalCore #Innovation #FutureTech`,
-        email: `Subject: Partnership Proposal: ${prompt} 2026\n\nDear [Partner Name],\n\nI hope this finds you well. I'm reaching out from VITAL regarding our upcoming ${prompt}. Given your industry leadership, we believe a strategic partnership would be mutually beneficial.\n\nOur goal is to create a high-impact environment for local innovators, and your brand aligns perfectly with our vision for excellence.\n\nWould you be open to a brief call to discuss how we can drive value together?\n\nBest regards,\nAdmin Liaison`,
-        hooks: [
-          "Stop following the trends—start setting them.",
-          "Where high-level networking meets real-world execution.",
-          "The future isn't coming; it's being built here."
-        ]
+        instagram: data.instagram_caption,
+        email: `Subject: ${data.sponsor_email.subject}\n\n${data.sponsor_email.body}`,
+        color_palette: data.color_palette || [],
       });
+    } catch (error) {
+      console.error("Liaison API error:", error);
+      Alert.alert("Error", "Failed to generate branding content. Please try again.");
+    } finally {
       setIsGenerating(false);
-    }, 2500);
+    }
   };
 
   const copyToClipboard = async (text: string, section: string) => {
@@ -216,14 +219,33 @@ export default function LiaisonAgent() {
             </ResultCard>
 
             <ResultCard 
-              title="Marketing Hooks" 
+              title="Color Palette" 
               icon={Zap} 
-              sectionId="hooks"
-              contentStr={content.hooks.join('\n\n')}
+              sectionId="colors"
+              contentStr={content.color_palette.join(', ')}
             >
-              {content.hooks.map((hook, i) => (
-                <Text key={i} style={styles.hookItem}>• {hook}{'\n'}</Text>
-              ))}
+              <View style={{ flexDirection: 'row', gap: 15, marginTop: 10 }}>
+                {content.color_palette.map((color, i) => (
+                  <View key={i} style={{ alignItems: 'center', gap: 6 }}>
+                    <View 
+                      style={{ 
+                        width: 44, 
+                        height: 44, 
+                        borderRadius: 22, 
+                        backgroundColor: color, 
+                        borderWidth: 1, 
+                        borderColor: theme.border,
+                        shadowColor: color,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 8,
+                        elevation: 4
+                      }} 
+                    />
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: theme.text }}>{color}</Text>
+                  </View>
+                ))}
+              </View>
             </ResultCard>
           </View>
         )}

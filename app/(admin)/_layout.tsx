@@ -105,6 +105,7 @@ export default function AdminLayout() {
       <ExpoTabs.Screen name="security" options={{ href: null }} />
       <ExpoTabs.Screen name="vault" options={{ href: null }} />
       <ExpoTabs.Screen name="settings" options={{ href: null }} />
+      <ExpoTabs.Screen name="problems" options={{ href: null }} />
     </ExpoTabs>
   );
 }

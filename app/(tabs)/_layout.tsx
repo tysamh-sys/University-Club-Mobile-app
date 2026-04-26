@@ -60,7 +60,15 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <SettingsIcon size={22} color={color} />,
           href: user?.role === 'member' ? '/settings' : null,
         }}
-      />      
+      />
+      <Tabs.Screen
+        name="support"
+        options={{
+          title: 'Support',
+          tabBarIcon: ({ color }) => <MessageCircle size={22} color={color} />,
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

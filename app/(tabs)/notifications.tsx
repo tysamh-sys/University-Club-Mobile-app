@@ -1,15 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ScrollView,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, Calendar, MessageSquare, Shield, ChevronRight } from 'lucide-react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '@/context/ThemeContext';
+import api from '@/services/api';
 
 interface Notification {
   id: number;
@@ -20,43 +22,37 @@ interface Notification {
   read: boolean;
 }
 
-const mockNotifications: Notification[] = [
-  {
-    id: 1,
-    title: 'Event Approved',
-    message: 'Your request to join "Tech Innovation Workshop" has been approved!',
-    time: '2m ago',
-    type: 'event',
-    read: false
-  },
-  {
-    id: 2,
-    title: 'New Message',
-    message: 'Sarah Chen sent you a message regarding the upcoming mixer.',
-    time: '1h ago',
-    type: 'message',
-    read: false
-  },
-  {
-    id: 3,
-    title: 'Security Alert',
-    message: 'New login detected from a new device in London, UK.',
-    time: '3h ago',
-    type: 'security',
-    read: true
-  },
-  {
-    id: 4,
-    title: 'System Update',
-    message: 'VITAL-CORE v1.2 is now live with enhanced analytics.',
-    time: '1d ago',
-    type: 'system',
-    read: true
-  }
-];
-
 export default function NotificationsScreen() {
   const { theme, isDarkMode } = useTheme();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get('/problems/notifications');
+      const mapped = res.data.notifications.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.title.toLowerCase().includes('admin') ? 'message' : 'system',
+        read: n.is_read,
+        time: new Date(n.created_at).toLocaleDateString()
+      }));
+      setNotifications(mapped);
+    } catch (err) {
+      console.error('Failed to load notifications', err);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -78,7 +74,11 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+      >
         
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Notifications</Text>
@@ -86,7 +86,7 @@ export default function NotificationsScreen() {
         </View>
 
         <View style={styles.list}>
-          {mockNotifications.map((notif, index) => (
+          {notifications.map((notif, index) => (
             <Animated.View 
               key={notif.id} 
               entering={FadeInUp.delay(200 + index * 100)}

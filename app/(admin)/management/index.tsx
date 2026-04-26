@@ -45,19 +45,29 @@ export default function UserManagement() {
     try {
       setLoading(true);
       const response = await api.get('/users');
-      setUsers(response.data);
+      // Ensure we only set users if the response is an array
+      if (Array.isArray(response.data)) {
+        setUsers(response.data);
+      } else if (response.data && Array.isArray(response.data.users)) {
+        // Handle alternative response format { users: [] }
+        setUsers(response.data.users);
+      } else {
+        console.warn('API returned non-array data for users');
+        setUsers([]);
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
-      Alert.alert('Error', 'Failed to fetch users from server.');
+      // We don't need to alert here because the API interceptor handles 401s
+      // and other errors might be temporary
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredUsers = users.filter(user =>
+  const filteredUsers = Array.isArray(users) ? users.filter(user =>
     (user.name && user.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
     (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  ) : [];
 
   const toggleRole = async (user: UserData) => {
     try {

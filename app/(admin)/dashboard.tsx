@@ -137,25 +137,106 @@ export default function AdminDashboard() {
     archives: 0,
     vault: 0,
     alerts: 0,
+    feedback: 0,
   });
+
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([
+    "SECURE-OS TERMINAL INITIALIZING...",
+    "Scanning network for active threats...",
+    "System Health: Optimal"
+  ]);
+
+  const [dynamicNotifications, setDynamicNotifications] = useState<any[]>([]);
+  const [dynamicActivities, setDynamicActivities] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [usersRes, eventsRes, sponsorsRes, filesRes] = await Promise.all([
+        const [usersRes, eventsRes, sponsorsRes, filesRes, archivesRes, feedbackRes, movesRes] = await Promise.all([
           api.get('/users').catch(() => ({ data: { users: [] } })),
           api.get('/events').catch(() => ({ data: { events: [], count: 0 } })),
           api.get('/sponsors').catch(() => ({ data: { sponsors: [], count: 0 } })),
           api.get('/files').catch(() => ({ data: { files: [], count: 0 } })),
+          api.get('/ai/historical-events?limit=1').catch(() => ({ data: { count: 0 } })),
+          api.get('/problems').catch(() => ({ data: { problems: [] } })),
+          api.get('/security/logs?type=blocks').catch(() => ({ data: [] }))
         ]);
         
+        
+        const problems = feedbackRes.data?.problems || [];
+        const unresolved = problems.filter((p: any) => !p.is_resolved);
+
         setStatsData(prev => ({
           ...prev,
           users:    Array.isArray(usersRes.data) ? usersRes.data.length : (usersRes.data?.users?.length || usersRes.data?.count || 0),
           events:   eventsRes.data?.count   || eventsRes.data?.events?.length   || 0,
           sponsors: sponsorsRes.data?.count || sponsorsRes.data?.sponsors?.length || 0,
           vault:    filesRes.data?.count    || filesRes.data?.files?.length       || 0,
+          archives: archivesRes.data?.count || 0,
+          feedback: unresolved.length,
         }));
+        
+        let notifs = [];
+        if (movesRes.data && movesRes.data.length > 0) {
+            const formattedLogs = movesRes.data.slice(0, 5).map((log: any) => 
+               `[${new Date(log.created_at).toLocaleTimeString()}] ${log.action} - IP: ${log.ip || 'Unknown'}`
+            );
+            setTerminalLogs(formattedLogs);
+            setStatsData(prev => ({ ...prev, alerts: movesRes.data.length }));
+
+            movesRes.data.slice(0, 3).forEach((move: any, idx: number) => {
+              notifs.push({
+                id: `alert-${idx}`,
+                type: 'alert',
+                title: 'Security System',
+                message: `${move.action} on ${move.ip || 'target'}`,
+                time: new Date(move.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                icon: AlertTriangle,
+                color: '#ef4444'
+              });
+            });
+        }
+
+        unresolved.slice(0, 3).forEach((prob: any, idx: number) => {
+           notifs.push({
+              id: `prob-${idx}`,
+              type: 'message',
+              title: 'Feedback / Issue',
+              message: prob.description || 'New issue reported',
+              time: new Date(prob.created_at).toLocaleDateString(),
+              icon: MessageSquare,
+              color: '#f59e0b'
+           });
+        });
+        setDynamicNotifications(notifs);
+
+        let acts = [];
+        const users = Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data?.users || []);
+        const recentUsers = [...users].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 3);
+        recentUsers.forEach((u: any, idx: number) => {
+           acts.push({
+              id: `usr-${idx}`,
+              title: 'New Member',
+              user: u.name,
+              time: new Date(u.created_at).toLocaleDateString(),
+              icon: UserPlus,
+              color: '#6366f1'
+           });
+        });
+
+        const evts = eventsRes.data?.events || [];
+        const recentEvts = [...evts].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 3);
+        recentEvts.forEach((e: any, idx: number) => {
+           acts.push({
+              id: `evt-${idx}`,
+              title: 'Event Scheduled',
+              user: e.title || 'New Event',
+              time: new Date(e.created_at).toLocaleDateString(),
+              icon: Calendar,
+              color: '#10b981'
+           });
+        });
+        setDynamicActivities(acts);
       } catch (error) {
         console.error("Error fetching dashboard stats", error);
       }
@@ -168,29 +249,12 @@ export default function AdminDashboard() {
     { label: 'Events', value: statsData.events.toString(), icon: Calendar, color: ['#10b981', '#059669'], path: '/(admin)/management/events' },
     { label: 'Sponsors', value: statsData.sponsors.toString(), icon: Building2, color: ['#f59e0b', '#d97706'], path: '/(admin)/management/sponsors' },
     { label: 'Archives', value: statsData.archives.toString(), icon: Archive, color: ['#8b5cf6', '#7c3aed'], path: '/(admin)/archives' },
+    { label: 'Feedback', value: statsData.feedback.toString(), icon: MessageSquare, color: ['#ec4899', '#db2777'], path: '/(admin)/problems' },
     { label: 'Vault', value: statsData.vault.toString(), icon: Lock, color: ['#475569', '#1e293b'], path: '/(admin)/vault' },
     { label: 'Alerts', value: statsData.alerts.toString(), icon: Shield, color: ['#ef4444', '#dc2626'], path: '/(admin)/security' }
   ];
 
-  const notifications = [
-    { id: 1, type: 'alert', title: 'Suspicious Login', message: 'Unknown IP from Riyadh attempted access.', time: '2m ago', icon: AlertTriangle, color: '#ef4444' },
-    { id: 2, type: 'info', title: 'Archive Synced', message: 'All documents successfully backed up.', time: '1h ago', icon: Info, color: '#6366f1' },
-    { id: 3, type: 'message', title: 'Join Request', message: 'New membership request from Elena.', time: '3h ago', icon: MessageSquare, color: '#10b981' }
-  ];
 
-  const terminalLogs = [
-    "Ahmed logged in from 192.168.1.1",
-    "Sara logged out successfully",
-    "WARNING: Suspicious IP detected at 04:22 AM",
-    "CRITICAL: User X is blocked after 5 failed attempts",
-    "Database backup sync complete"
-  ];
-
-  const activities = [
-    { id: 1, title: 'Join Request', user: 'Leo Messi', time: '2m ago', icon: UserPlus, color: '#6366f1' },
-    { id: 2, title: 'System Update', user: 'V-Core v1.4', time: '1h ago', icon: RefreshCcw, color: '#10b981' },
-    { id: 3, title: 'New Sponsor', user: 'Tesla Inc', time: '3h ago', icon: Zap, color: '#f59e0b' }
-  ];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -207,7 +271,7 @@ export default function AdminDashboard() {
             style={[styles.bellBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
             <Bell size={20} color={theme.text} />
-            <View style={[styles.notificationDot, { backgroundColor: '#ef4444' }]} />
+            <View style={[styles.notificationDot, { backgroundColor: dynamicNotifications.length > 0 ? '#ef4444' : 'transparent', borderWidth: dynamicNotifications.length > 0 ? 1.5 : 0 }]} />
           </TouchableOpacity>
         </Animated.View>
 
@@ -257,23 +321,27 @@ export default function AdminDashboard() {
             </TouchableOpacity>
           </View>
           <View style={styles.activityList}>
-            {activities.map((activity, index) => (
-              <Animated.View 
-                key={activity.id} 
-                entering={FadeInUp.delay(700 + index * 100)}
-                layout={Layout.springify()}
-                style={[styles.activityCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-              >
-                <View style={[styles.activityIcon, { backgroundColor: activity.color + '15' }]}>
-                  <activity.icon size={18} color={activity.color} />
-                </View>
-                <View style={styles.activityContent}>
-                  <Text style={[styles.activityTitle, { color: theme.text }]}>{activity.title}</Text>
-                  <Text style={[styles.activityUser, { color: theme.subtext }]}>{activity.user}</Text>
-                </View>
-                <Text style={[styles.activityTime, { color: theme.subtext }]}>{activity.time}</Text>
-              </Animated.View>
-            ))}
+            {dynamicActivities.length === 0 ? (
+              <Text style={{color: theme.subtext, fontStyle: 'italic', textAlign: 'center', padding: 20}}>No recent activity found.</Text>
+            ) : (
+              dynamicActivities.map((activity, index) => (
+                <Animated.View 
+                  key={activity.id} 
+                  entering={FadeInUp.delay(700 + index * 100)}
+                  layout={Layout.springify()}
+                  style={[styles.activityCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                >
+                  <View style={[styles.activityIcon, { backgroundColor: activity.color + '15' }]}>
+                    <activity.icon size={18} color={activity.color} />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={[styles.activityTitle, { color: theme.text }]}>{activity.title}</Text>
+                    <Text style={[styles.activityUser, { color: theme.subtext }]}>{activity.user}</Text>
+                  </View>
+                  <Text style={[styles.activityTime, { color: theme.subtext }]}>{activity.time}</Text>
+                </Animated.View>
+              ))
+            )}
           </View>
         </Animated.View>
 
@@ -291,22 +359,26 @@ export default function AdminDashboard() {
             </View>
             
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.notifList}>
-              {notifications.map((notif, i) => (
-                <Animated.View 
-                  key={notif.id} 
-                  entering={FadeInUp.delay(100 + i * 100)}
-                  style={[styles.notifCard, { backgroundColor: theme.input }]}
-                >
-                  <View style={[styles.notifIcon, { backgroundColor: notif.color + '20' }]}>
-                    <notif.icon size={20} color={notif.color} />
-                  </View>
-                  <View style={styles.notifContent}>
-                    <Text style={[styles.notifTitle, { color: theme.text }]}>{notif.title}</Text>
-                    <Text style={[styles.notifMessage, { color: theme.subtext }]}>{notif.message}</Text>
-                    <Text style={[styles.notifTime, { color: theme.subtext }]}>{notif.time}</Text>
-                  </View>
-                </Animated.View>
-              ))}
+              {dynamicNotifications.length === 0 ? (
+                <Text style={{color: theme.subtext, fontStyle: 'italic', textAlign: 'center', padding: 20}}>No new alerts.</Text>
+              ) : (
+                dynamicNotifications.map((notif, i) => (
+                  <Animated.View 
+                    key={notif.id} 
+                    entering={FadeInUp.delay(100 + i * 100)}
+                    style={[styles.notifCard, { backgroundColor: theme.input }]}
+                  >
+                    <View style={[styles.notifIcon, { backgroundColor: notif.color + '20' }]}>
+                      <notif.icon size={20} color={notif.color} />
+                    </View>
+                    <View style={styles.notifContent}>
+                      <Text style={[styles.notifTitle, { color: theme.text }]}>{notif.title}</Text>
+                      <Text style={[styles.notifMessage, { color: theme.subtext }]}>{notif.message}</Text>
+                      <Text style={[styles.notifTime, { color: theme.subtext }]}>{notif.time}</Text>
+                    </View>
+                  </Animated.View>
+                ))
+              )}
             </ScrollView>
 
             <TouchableOpacity style={styles.clearBtn}>

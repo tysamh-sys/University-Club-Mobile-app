@@ -24,7 +24,7 @@ import api from '@/services/api';
 type SponsorTier = 'Platinum' | 'Gold' | 'Silver';
 
 interface Sponsor {
-  _id: string;
+  id: string;
   name: string;
   email: string;
   contactPerson: string;
@@ -83,10 +83,10 @@ export default function SponsorManagement() {
   const handleSave = async () => {
     try {
       if (editingSponsor) {
-        const res = await api.put(`/sponsors/${editingSponsor._id}`, formData);
+        const res = await api.put(`/sponsors/${editingSponsor.id}`, formData);
         if (res.data.sponsor) {
           setSponsors(sponsors.map(s =>
-            s._id === editingSponsor._id ? res.data.sponsor : s
+            s.id === editingSponsor.id ? res.data.sponsor : s
           ));
         }
       } else {
@@ -108,7 +108,7 @@ export default function SponsorManagement() {
       { text: 'Terminate', style: 'destructive', onPress: async () => {
           try {
             await api.delete(`/sponsors/${id}`);
-            setSponsors(sponsors.filter(s => s._id !== id));
+            setSponsors(sponsors.filter(s => s.id !== id));
           } catch (err) {
             console.error('Error deleting sponsor:', err);
             Alert.alert('Error', 'Failed to delete sponsor.');
@@ -143,7 +143,7 @@ export default function SponsorManagement() {
       <ScrollView contentContainerStyle={styles.sponsorList} showsVerticalScrollIndicator={false}>
         {sponsors.map((sponsor, index) => (
           <Animated.View 
-            key={sponsor._id} 
+            key={sponsor.id || index} 
             entering={FadeInUp.delay(200 + index * 100)}
             style={[styles.sponsorCard, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
@@ -181,7 +181,7 @@ export default function SponsorManagement() {
               <TouchableOpacity onPress={() => openEditModal(sponsor)} style={[styles.actionBtn, { backgroundColor: theme.input }]}>
                 <Edit2 size={16} color={theme.text} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => deleteSponsor(sponsor._id)} style={[styles.actionBtn, styles.deleteBtn]}>
+              <TouchableOpacity onPress={() => deleteSponsor(sponsor.id)} style={[styles.actionBtn, styles.deleteBtn]}>
                 <Trash2 size={16} color="#ef4444" />
               </TouchableOpacity>
             </View>
@@ -262,6 +262,17 @@ export default function SponsorManagement() {
                   placeholder="corporate@domain.com"
                   placeholderTextColor={theme.subtext}
                   keyboardType="email-address"
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: theme.text }]}>Phone Number</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border }]}
+                  value={formData.phone}
+                  onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                  placeholder="+1 234 567 890"
+                  placeholderTextColor={theme.subtext}
+                  keyboardType="phone-pad"
                 />
               </View>
             </ScrollView>

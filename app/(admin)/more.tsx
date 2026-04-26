@@ -16,6 +16,7 @@ import {
   Info,
   LifeBuoy,
   Settings as SettingsIcon,
+  MessageSquare,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -31,6 +32,7 @@ export default function MoreScreen() {
     { id: 'security', label: 'Security', icon: Shield, description: 'System monitoring & access', color: ['#ef4444', '#dc2626'] },
     { id: 'vault', label: 'Vault', icon: Lock, description: 'Highly secure encrypted storage', color: ['#475569', '#1e293b'] },
     { id: 'settings', label: 'Settings', icon: SettingsIcon, description: 'System & root preferences', color: ['#6366f1', '#4f46e5'] },
+    { id: 'problems', label: 'Problems', icon: MessageSquare, description: 'Review user issues & feedback', color: ['#ec4899', '#db2777'] },
   ];
 
   const handleNavigate = (id: string) => {

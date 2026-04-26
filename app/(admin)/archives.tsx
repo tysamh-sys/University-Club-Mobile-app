@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -24,7 +25,13 @@ import {
   Send,
   MessageSquare,
   Zap,
-  Info
+  Info,
+  X,
+  MapPin,
+  Users,
+  DollarSign,
+  AlertTriangle,
+  Award
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -68,6 +75,10 @@ export default function ArchivesScreen() {
   const [archives, setArchives] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
   
   // AI Chatbot State
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -79,21 +90,46 @@ export default function ArchivesScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    fetchArchives();
+    fetchArchives(true);
   }, []);
 
-  const fetchArchives = async () => {
+  const fetchArchives = async (reset = false) => {
     try {
-      const res = await api.get('/events'); // fallback to all events if no archived exist
-      setArchives(res.data.events || []);
+      if (reset) {
+        setIsLoadingMore(true);
+        const res = await api.get('/ai/historical-events?limit=10&offset=0');
+        const evts = res.data.events || [];
+        setArchives(evts);
+        setOffset(10);
+        setHasMore(evts.length === 10);
+        setIsLoadingMore(false);
+      } else {
+        if (!hasMore || isLoadingMore) return;
+        setIsLoadingMore(true);
+        const res = await api.get(`/ai/historical-events?limit=10&offset=${offset}`);
+        const evts = res.data.events || [];
+        setArchives(prev => [...prev, ...evts]);
+        setOffset(prev => prev + 10);
+        setHasMore(evts.length === 10);
+        setIsLoadingMore(false);
+      }
     } catch (err) {
       console.error('Error fetching archives:', err);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const handleScroll = ({ nativeEvent }: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+    const paddingToBottom = 50;
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+      fetchArchives(false);
     }
   };
 
   const filteredArchives = archives.filter(archive =>
     (selectedCategory === 'All' || archive.category === selectedCategory) &&
-    ((archive.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    ((archive.event_name || archive.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
      (archive.category || '').toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -195,7 +231,12 @@ export default function ArchivesScreen() {
               </ScrollView>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView 
+              showsVerticalScrollIndicator={false} 
+              contentContainerStyle={styles.scrollContent}
+              onScroll={handleScroll}
+              scrollEventThrottle={400}
+            >
               <Animated.View entering={FadeInUp.delay(200)} style={styles.section}>
                 <TouchableOpacity onPress={() => setIsChatOpen(true)}>
                   <LinearGradient colors={[theme.primary, '#4f46e5']} style={styles.aiInsightCard}>
@@ -222,23 +263,26 @@ export default function ArchivesScreen() {
                           <FileText size={20} color={theme.primary} />
                         </View>
                         <View style={styles.cardInfo}>
-                          <Text style={[styles.archiveTitle, { color: theme.text }]}>{item.title}</Text>
+                          <Text style={[styles.archiveTitle, { color: theme.text }]}>{item.category || 'Record'}</Text>
                           <View style={styles.tagRow}>
-                            <Text style={[styles.categoryLabel, { color: theme.primary }]}>{item.category || 'Record'}</Text>
+                            <Text style={[styles.categoryLabel, { color: theme.primary }]}>{item.event_name || item.title}</Text>
                             <View style={styles.dot} />
-                            <Text style={[styles.dateLabel, { color: theme.subtext }]}>{item.date}</Text>
+                            <Text style={[styles.dateLabel, { color: theme.subtext }]}>{item.event_date || item.date}</Text>
                           </View>
                         </View>
                       </View>
                       <Text style={[styles.archiveSnippet, { color: theme.subtext }]} numberOfLines={2}>
-                        {item.description || 'No description available for this historical record.'}
+                        {item.main_issue || item.description || 'No description available for this historical record.'}
                       </Text>
                       <View style={styles.cardFooter}>
                         <View style={styles.authorBox}>
                           <User size={12} color={theme.subtext} />
                           <Text style={[styles.authorName, { color: theme.subtext }]}>System</Text>
                         </View>
-                        <TouchableOpacity style={styles.viewBtn}>
+                        <TouchableOpacity 
+                          style={styles.viewBtn}
+                          onPress={() => setSelectedEvent(item)}
+                        >
                           <Text style={[styles.viewBtnText, { color: theme.primary }]}>View Full</Text>
                         </TouchableOpacity>
                       </View>
@@ -325,6 +369,88 @@ export default function ArchivesScreen() {
             </View>
           </KeyboardAvoidingView>
         )}
+
+        {/* Event Details Modal */}
+        <Modal visible={!!selectedEvent} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>{selectedEvent?.category || 'Event Details'}</Text>
+                  <Text style={[styles.modalSubtitle, { color: theme.subtext }]}>{selectedEvent?.event_name || selectedEvent?.title}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedEvent(null)} style={[styles.closeBtn, { backgroundColor: theme.input }]}>
+                  <X size={20} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                {/* Info Cards */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                  <View style={[styles.detailBox, { backgroundColor: theme.input, borderColor: theme.border }]}>
+                    <Calendar size={18} color={theme.primary} />
+                    <Text style={[styles.detailBoxLabel, { color: theme.subtext }]}>Date</Text>
+                    <Text style={[styles.detailBoxValue, { color: theme.text }]}>{selectedEvent?.event_date || 'N/A'}</Text>
+                  </View>
+                  <View style={[styles.detailBox, { backgroundColor: theme.input, borderColor: theme.border }]}>
+                    <MapPin size={18} color={theme.accent} />
+                    <Text style={[styles.detailBoxLabel, { color: theme.subtext }]}>Location</Text>
+                    <Text style={[styles.detailBoxValue, { color: theme.text }]}>{selectedEvent?.location || 'N/A'}</Text>
+                  </View>
+                  <View style={[styles.detailBox, { backgroundColor: theme.input, borderColor: theme.border }]}>
+                    <Users size={18} color="#10b981" />
+                    <Text style={[styles.detailBoxLabel, { color: theme.subtext }]}>Attendees</Text>
+                    <Text style={[styles.detailBoxValue, { color: theme.text }]}>{selectedEvent?.participants || 0}</Text>
+                  </View>
+                </View>
+
+                {/* Financials */}
+                <View style={[styles.sectionBlock, { backgroundColor: theme.input, borderColor: theme.border }]}>
+                  <Text style={[styles.blockTitle, { color: theme.text }]}>Financials</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                    <View>
+                      <Text style={[styles.financialLabel, { color: theme.subtext }]}>Budget</Text>
+                      <Text style={[styles.financialValue, { color: theme.text }]}>{selectedEvent?.budget_tnd} TND</Text>
+                    </View>
+                    <View>
+                      <Text style={[styles.financialLabel, { color: theme.subtext }]}>Revenue</Text>
+                      <Text style={[styles.financialValue, { color: '#10b981' }]}>+{selectedEvent?.revenue_tnd} TND</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Performance & Issues */}
+                <View style={[styles.sectionBlock, { backgroundColor: theme.input, borderColor: theme.border }]}>
+                  <Text style={[styles.blockTitle, { color: theme.text }]}>Retrospective</Text>
+                  
+                  <View style={styles.retroItem}>
+                    <Award size={16} color={theme.accent} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.retroLabel, { color: theme.text }]}>Satisfaction Score</Text>
+                      <Text style={[styles.retroValue, { color: theme.subtext }]}>{selectedEvent?.satisfaction_score} / 10</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.retroItem}>
+                    <AlertTriangle size={16} color="#f59e0b" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.retroLabel, { color: theme.text }]}>Main Issue</Text>
+                      <Text style={[styles.retroValue, { color: theme.subtext }]}>{selectedEvent?.main_issue || 'None reported'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.retroItem}>
+                    <Info size={16} color={theme.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.retroLabel, { color: theme.text }]}>Secondary Issue</Text>
+                      <Text style={[styles.retroValue, { color: theme.subtext }]}>{selectedEvent?.secondary_issue || 'None reported'}</Text>
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -636,5 +762,82 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    height: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  detailBox: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailBoxLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  detailBoxValue: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  sectionBlock: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  blockTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  financialLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  financialValue: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  retroItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 16,
+  },
+  retroLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  retroValue: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

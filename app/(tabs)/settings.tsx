@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeInRight, Layout } from 'react-native-reanimated';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import { router } from 'expo-router';
 
 export default function SettingsScreen() {
   const { logout, user } = useAuth();
@@ -242,7 +243,10 @@ export default function SettingsScreen() {
                 <ChevronRight size={18} color={theme.subtext} />
               </TouchableOpacity>
               
-              <TouchableOpacity style={[styles.settingItem, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <TouchableOpacity 
+                style={[styles.settingItem, { backgroundColor: theme.card, borderColor: theme.border }]}
+                onPress={() => router.push('/(tabs)/support' as any)}
+              >
                 <View style={[styles.settingIcon, { backgroundColor: 'rgba(102, 102, 255, 0.1)' }]}>
                   <CircleHelp size={20} color="#6666ff" />
                 </View>

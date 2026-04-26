@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { router } from 'expo-router';
-import api from '../services/api';
+import api, { setLogoutHandler } from '../services/api';
 import * as SecureStore from 'expo-secure-store';
 
 interface User {
@@ -25,6 +25,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Register global logout handler for 401 errors
+    setLogoutHandler(() => logout());
+
     const checkUser = async () => {
       try {
         const token = await SecureStore.getItemAsync('userToken');

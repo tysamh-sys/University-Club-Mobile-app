@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -28,7 +28,7 @@ interface ParticipationRequest {
 import api from '@/services/api';
 
 interface Event {
-  _id: string;
+  id: string;
   title: string;
   date: string;
   participants: number;
@@ -62,48 +62,59 @@ export default function EventManagement() {
   const [viewingRequests, setViewingRequests] = useState<Event | null>(null);
   const [newEvent, setNewEvent] = useState({
     title: '',
-    participants: 0
+    description: '',
+    date: new Date().toISOString().split('T')[0],
+    location: '',
+    budget: ''
   });
-  const [aiGenerated, setAiGenerated] = useState<{
-    date: string;
-    budget: number;
-    description: string;
-  } | null>(null);
+  const [generatingAI, setGeneratingAI] = useState(false);
 
-  const generateWithAI = () => {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + Math.floor(Math.random() * 14) + 7);
-    const budgetEstimate = newEvent.participants * (15 + Math.floor(Math.random() * 10));
-    const descriptions = [
-      `An engaging workshop designed to bring together members for knowledge sharing.`,
-      `Join us for a session featuring expert speakers and interactive networking.`,
-      `Experience hands-on activities and collaborative learning in a dynamic environment.`
-    ];
-
-    setAiGenerated({
-      date: futureDate.toISOString().split('T')[0],
-      budget: budgetEstimate,
-      description: descriptions[Math.floor(Math.random() * descriptions.length)]
-    });
+  const generateWithAI = async () => {
+    if (!newEvent.title) {
+      Alert.alert('Required', 'Please enter an Event Title first so the AI knows what to plan.');
+      return;
+    }
+    setGeneratingAI(true);
+    try {
+      const res = await api.post('/ai/architect', { idea: newEvent.title, participants: 30 });
+      const data = res.data.data;
+      if (data) {
+        setNewEvent(prev => ({
+          ...prev,
+          date: data.suggested_date || prev.date,
+          location: data.room || prev.location,
+          budget: data.budget_tnd ? data.budget_tnd.toString() : prev.budget,
+          description: data.recommendations ? data.recommendations.join('\n') : prev.description
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to generate with AI:', err);
+      Alert.alert('Error', 'Failed to contact AI Architect.');
+    } finally {
+      setGeneratingAI(false);
+    }
   };
 
   const createEvent = async () => {
-    if (!newEvent.title || !aiGenerated) return;
+    if (!newEvent.title || !newEvent.date || !newEvent.description) {
+      Alert.alert('Required Fields', 'Title, Description, and Date are required.');
+      return;
+    }
+    
     try {
       const eventPayload = {
         title: newEvent.title,
-        date: aiGenerated.date,
-        participants: newEvent.participants,
-        budget: aiGenerated.budget,
-        description: aiGenerated.description
+        date: newEvent.date,
+        location: newEvent.location,
+        budget: parseFloat(newEvent.budget) || 0,
+        description: newEvent.description
       };
       const res = await api.post('/events', eventPayload);
       if (res.data.event) {
         setEvents([...events, res.data.event]);
       }
       setShowCreateModal(false);
-      setNewEvent({ title: '', participants: 0 });
-      setAiGenerated(null);
+      setNewEvent({ title: '', description: '', date: new Date().toISOString().split('T')[0], location: '', budget: '' });
     } catch (err) {
       console.error('Error creating event:', err);
       Alert.alert('Error', 'Failed to create event.');
@@ -116,7 +127,7 @@ export default function EventManagement() {
       { text: 'Delete', style: 'destructive', onPress: async () => {
           try {
             await api.delete(`/events/${id}`);
-            setEvents(events.filter(e => e._id !== id));
+            setEvents(events.filter(e => e.id !== id));
           } catch (err) {
             console.error('Error deleting event:', err);
             Alert.alert('Error', 'Failed to delete event.');
@@ -129,7 +140,7 @@ export default function EventManagement() {
     try {
       await api.put(`/events/requests/${requestId}/${status}`);
       setEvents(events.map(e => {
-        if (e._id === eventId) {
+        if (e.id === eventId) {
           return {
             ...e,
             requests: (e.requests || []).map(r => r.id === requestId ? { ...r, status } : r)
@@ -138,7 +149,7 @@ export default function EventManagement() {
         return e;
       }));
       
-      if (viewingRequests && viewingRequests._id === eventId) {
+      if (viewingRequests && viewingRequests.id === eventId) {
         setViewingRequests(prev => {
           if (!prev) return null;
           return {
@@ -173,7 +184,7 @@ export default function EventManagement() {
       <ScrollView contentContainerStyle={styles.eventsList} showsVerticalScrollIndicator={false}>
         {events.map((event) => (
           <Animated.View 
-            key={event._id} 
+            key={event.id} 
             entering={FadeInUp}
             style={[styles.eventCard, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
@@ -199,7 +210,7 @@ export default function EventManagement() {
                   <Edit2 size={18} color={theme.text} />
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  onPress={() => deleteEvent(event._id)} 
+                  onPress={() => deleteEvent(event.id)} 
                   style={[styles.actionButton, styles.deleteButton]}
                 >
                   <Trash2 size={18} color="#ef4444" />
@@ -271,13 +282,13 @@ export default function EventManagement() {
                     {request.status === 'pending' ? (
                       <View style={styles.requestActions}>
                         <TouchableOpacity 
-                          onPress={() => handleRequest(viewingRequests._id, request.id, 'accepted')}
+                          onPress={() => handleRequest(viewingRequests.id, request.id, 'accepted')}
                           style={[styles.requestActionBtn, { backgroundColor: theme.accent }]}
                         >
                           <Check size={18} color="#ffffff" />
                         </TouchableOpacity>
                         <TouchableOpacity 
-                          onPress={() => handleRequest(viewingRequests._id, request.id, 'rejected')}
+                          onPress={() => handleRequest(viewingRequests.id, request.id, 'rejected')}
                           style={[styles.requestActionBtn, { backgroundColor: '#ef4444' }]}
                         >
                           <X size={18} color="#ffffff" />
@@ -306,26 +317,70 @@ export default function EventManagement() {
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
               <View style={styles.modalForm}>
                 <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: theme.text }]}>Event Name</Text>
+                  <Text style={[styles.label, { color: theme.text }]}>Event Title *</Text>
                   <TextInput
                     style={[styles.modalInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border }]}
                     value={newEvent.title}
                     onChangeText={(text) => setNewEvent({ ...newEvent, title: text })}
-                    placeholder="Tech Workshop"
+                    placeholder="E.g. AI Workshop"
                     placeholderTextColor={theme.subtext}
                   />
                 </View>
-                <TouchableOpacity onPress={generateWithAI} style={styles.aiBtn}>
-                  <LinearGradient colors={[theme.primary, '#4f46e5']} style={styles.aiBtnGradient}>
+
+                <TouchableOpacity onPress={generateWithAI} disabled={generatingAI} style={styles.aiBtn}>
+                  <LinearGradient colors={[theme.primary, '#4f46e5']} style={[styles.aiBtnGradient, generatingAI && { opacity: 0.7 }]}>
                     <Sparkles size={20} color="#ffffff" />
-                    <Text style={styles.aiBtnText}>AI Assistant</Text>
+                    <Text style={styles.aiBtnText}>
+                      {generatingAI ? 'AI is planning...' : 'Auto-fill with AI'}
+                    </Text>
                   </LinearGradient>
                 </TouchableOpacity>
-                {aiGenerated && (
-                  <View style={[styles.aiResult, { backgroundColor: theme.input, borderColor: theme.border }]}>
-                    <Text style={[styles.aiResultValue, { color: theme.text }]}>{aiGenerated.description}</Text>
-                  </View>
-                )}
+                
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: theme.text }]}>Date (YYYY-MM-DD) *</Text>
+                  <TextInput
+                    style={[styles.modalInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border }]}
+                    value={newEvent.date}
+                    onChangeText={(text) => setNewEvent({ ...newEvent, date: text })}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={theme.subtext}
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: theme.text }]}>Location</Text>
+                  <TextInput
+                    style={[styles.modalInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border }]}
+                    value={newEvent.location}
+                    onChangeText={(text) => setNewEvent({ ...newEvent, location: text })}
+                    placeholder="E.g. Main Hall"
+                    placeholderTextColor={theme.subtext}
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: theme.text }]}>Budget ($)</Text>
+                  <TextInput
+                    style={[styles.modalInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border }]}
+                    value={newEvent.budget}
+                    onChangeText={(text) => setNewEvent({ ...newEvent, budget: text })}
+                    placeholder="E.g. 500"
+                    keyboardType="numeric"
+                    placeholderTextColor={theme.subtext}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: theme.text }]}>Description *</Text>
+                  <TextInput
+                    style={[styles.modalInput, { backgroundColor: theme.input, color: theme.text, borderColor: theme.border, height: 100, textAlignVertical: 'top' }]}
+                    value={newEvent.description}
+                    onChangeText={(text) => setNewEvent({ ...newEvent, description: text })}
+                    placeholder="Detailed information about the event..."
+                    placeholderTextColor={theme.subtext}
+                    multiline
+                  />
+                </View>
               </View>
             </ScrollView>
             <View style={styles.modalActions}>

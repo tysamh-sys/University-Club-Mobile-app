@@ -15,14 +15,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/context/ThemeContext';
 import Animated, { FadeInUp, FadeInRight, Layout } from 'react-native-reanimated';
 
+import api from '@/services/api';
+import { initCrypto, encryptMessage, decryptMessage } from '@/services/cryptoService';
+import { useAuth } from '@/context/AuthContext';
+
 interface User {
   id: number;
   name: string;
-  lastMessage: string;
-  timestamp: string;
-  online: boolean;
-  avatar: string;
-  color: string[];
+  email: string;
+  role: string;
+  public_key: string;
+  lastMessage?: string;
+  timestamp?: string;
+  online?: boolean;
+  avatar?: string;
+  color?: string[];
 }
 
 interface Message {
@@ -32,12 +39,12 @@ interface Message {
   timestamp: string;
 }
 
-const mockUsers: User[] = [
-  { id: 1, name: 'Sarah Chen', lastMessage: 'See you at the workshop!', timestamp: '2m ago', online: true, avatar: 'SC', color: ['#FF3366', '#FF6B6B'] },
-  { id: 2, name: 'Marcus Johnson', lastMessage: 'Thanks for the info', timestamp: '15m ago', online: true, avatar: 'MJ', color: ['#4facfe', '#00f2fe'] },
-  { id: 3, name: 'Emma Williams', lastMessage: 'Looking forward to it', timestamp: '1h ago', online: false, avatar: 'EW', color: ['#667eea', '#764ba2'] },
-  { id: 4, name: 'David Park', lastMessage: 'Got the details', timestamp: '3h ago', online: true, avatar: 'DP', color: ['#f093fb', '#f5576c'] },
-  { id: 5, name: 'Lisa Anderson', lastMessage: 'Perfect timing!', timestamp: '5h ago', online: false, avatar: 'LA', color: ['#43e97b', '#38f9d7'] }
+const colors = [
+  ['#FF3366', '#FF6B6B'],
+  ['#4facfe', '#00f2fe'],
+  ['#667eea', '#764ba2'],
+  ['#f093fb', '#f5576c'],
+  ['#43e97b', '#38f9d7']
 ];
 
 export default function ChatScreen() {
@@ -46,27 +53,112 @@ export default function ChatScreen() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageText, setMessageText] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 1, text: 'Hey! Are you coming to the workshop tomorrow?', sender: 'them', timestamp: '10:30 AM' },
-    { id: 2, text: 'Yes, definitely! What time does it start?', sender: 'me', timestamp: '10:32 AM' },
-    { id: 3, text: 'It starts at 2 PM. Should be great!', sender: 'them', timestamp: '10:33 AM' },
-    { id: 4, text: 'See you at the workshop!', sender: 'them', timestamp: '10:35 AM' }
-  ]);
+  const { user } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [myPublicKey, setMyPublicKey] = useState('');
 
-  const filteredUsers = mockUsers.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase())
+  React.useEffect(() => {
+    setupChat();
+  }, []);
+
+  const setupChat = async () => {
+    try {
+      const keys = await initCrypto();
+      setMyPublicKey(keys.publicKey);
+      fetchUsers();
+    } catch (err) {
+      console.error('Failed to init crypto:', err);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const res = await api.get('/chat/users');
+      const mapped = res.data.users.map((u: any, idx: number) => ({
+        ...u,
+        avatar: u.name.substring(0, 2).toUpperCase(),
+        color: colors[idx % colors.length],
+        online: Math.random() > 0.5,
+        timestamp: '',
+        lastMessage: u.public_key ? 'Ready to chat securely' : 'User not ready'
+      }));
+      setUsers(mapped);
+    } catch (err) {
+      console.error('Failed to load chat users', err);
+    }
+  };
+
+  React.useEffect(() => {
+    if (selectedUser) {
+      loadMessages();
+      const interval = setInterval(loadMessages, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedUser]);
+
+  const loadMessages = async () => {
+    if (!selectedUser || !selectedUser.public_key) return;
+    try {
+      const res = await api.get(`/chat/messages/${selectedUser.id}`);
+      const rawMessages = res.data.messages || [];
+      
+      const decryptedMessages: Message[] = [];
+      for (const msg of rawMessages) {
+        try {
+          const senderPubKey = msg.sender_id === user?.id ? selectedUser.public_key : selectedUser.public_key;
+          // Wait, actually if I am the sender, I encrypt with THEIR public key, but I CANNOT decrypt it later with my private key + their public key unless I decrypt it as the sender?
+          // No, nacl.box decrypt uses (senderPubKey, mySecretKey).
+          // If I sent the message, it was encrypted with (mySecretKey, theirPubKey). 
+          // Wait, Box is symmetric in keys! nacl.box.open(..., nonce, theirPubKey, mySecretKey) works to decrypt messages sent BY me to THEM!
+          
+          const text = await decryptMessage(msg.encrypted_message, msg.nonce, selectedUser.public_key);
+          decryptedMessages.push({
+            id: msg.id,
+            text,
+            sender: msg.sender_id === user?.id ? 'me' : 'them',
+            timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        } catch (e) {
+          decryptedMessages.push({
+            id: msg.id,
+            text: '🔒 [Decryption failed]',
+            sender: msg.sender_id === user?.id ? 'me' : 'them',
+            timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        }
+      }
+      setMessages(decryptedMessages);
+    } catch (err) {
+      console.error('Failed to load messages', err);
+    }
+  };
+
+  const filteredUsers = users.filter(u =>
+    u.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const sendMessage = () => {
-    if (!messageText.trim()) return;
-    const newMessage: Message = {
-      id: messages.length + 1,
-      text: messageText,
-      sender: 'me',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    setMessages([...messages, newMessage]);
-    setMessageText('');
+  const sendMessage = async () => {
+    if (!messageText.trim() || !selectedUser || !selectedUser.public_key) return;
+    try {
+      const { encryptedMessage, nonce } = await encryptMessage(messageText, selectedUser.public_key);
+      
+      const res = await api.post('/chat/message', {
+        receiverId: selectedUser.id,
+        encryptedMessage,
+        nonce
+      });
+
+      const newMessage: Message = {
+        id: res.data.data.id,
+        text: messageText,
+        sender: 'me',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages([...messages, newMessage]);
+      setMessageText('');
+    } catch (err) {
+      console.error('Failed to send message', err);
+    }
   };
 
   if (selectedUser) {
