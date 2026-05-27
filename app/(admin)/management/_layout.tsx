@@ -18,7 +18,7 @@ export default function ManagementLayout() {
 
   // Determine active tab based on segments
   // segments might look like ['(admin)', 'management', 'events']
-  const currentSegment = segments[segments.length - 1];
+  const currentSegment = segments[segments.length - 1] as string;
   const activeTab = tabs.find(tab => {
     if (tab.id === 'index') {
       return currentSegment === 'management' || currentSegment === 'index';

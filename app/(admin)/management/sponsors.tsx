@@ -117,7 +117,7 @@ export default function SponsorManagement() {
     ]);
   };
 
-  const getTierColor = (tier: SponsorTier) => {
+  const getTierColor = (tier: SponsorTier): [string, string] => {
     switch (tier) {
       case 'Platinum': return ['#94a3b8', '#475569'];
       case 'Gold': return ['#fbbf24', '#d97706'];

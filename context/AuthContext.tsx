@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import api, { setLogoutHandler } from '../services/api';
 import * as SecureStore from 'expo-secure-store';
+import { registerForPushNotificationsAsync, saveTokenToBackend } from '../services/notificationService';
 
 interface User {
   id?: string | number;
@@ -33,7 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await SecureStore.getItemAsync('userToken');
         if (token) {
           const response = await api.get('/auth/');
-          setUser(response.data.user || response.data);
+          const userData = response.data.user || response.data;
+          setUser(userData);
+          
+          // 🔔 Register Notifications
+          const pushToken = await registerForPushNotificationsAsync();
+          if (pushToken) await saveTokenToBackend(pushToken);
         }
       } catch (error) {
         console.log('No valid session found');
@@ -56,6 +62,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const role = userData?.role || 'member';
       const finalUser = { ...userData, role };
       setUser(finalUser);
+
+      // 🔔 Register Notifications after login
+      const pushToken = await registerForPushNotificationsAsync();
+      if (pushToken) await saveTokenToBackend(pushToken);
       // Navigation is handled automatically by _layout.tsx when user state changes
     } catch (error: any) {
       console.error('Authentication failed:', error?.response?.data || error.message);

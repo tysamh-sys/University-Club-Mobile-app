@@ -115,9 +115,19 @@ export default function LiaisonAgent() {
           </Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.input }]}>
-          <RefreshCw size={16} color={theme.subtext} />
-          <Text style={[styles.actionBtnText, { color: theme.subtext }]}>Regenerate</Text>
+        <TouchableOpacity 
+          onPress={handleGenerate}
+          disabled={isGenerating}
+          style={[styles.actionBtn, { backgroundColor: theme.input, opacity: isGenerating ? 0.6 : 1 }]}
+        >
+          {isGenerating ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : (
+            <RefreshCw size={16} color={theme.subtext} />
+          )}
+          <Text style={[styles.actionBtnText, { color: theme.subtext }]}>
+            {isGenerating ? 'Processing...' : 'Regenerate'}
+          </Text>
         </TouchableOpacity>
       </View>
     </Animated.View>

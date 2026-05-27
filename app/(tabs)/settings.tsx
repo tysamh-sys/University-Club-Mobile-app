@@ -24,9 +24,9 @@ export default function SettingsScreen() {
   const [activeSection, setActiveSection] = useState<'profile' | 'password'>('profile');
   
   const [profileData, setProfileData] = useState({
-    name: 'John Doe',
+    name: user?.name || 'VITAL User',
     email: user?.email || '',
-    department: 'Engineering'
+    department: user?.department || 'University Member'
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -34,6 +34,16 @@ export default function SettingsScreen() {
     newPassword: '',
     confirmPassword: ''
   });
+
+  React.useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.name || 'VITAL User',
+        email: user.email || '',
+        department: user.department || 'University Member'
+      });
+    }
+  }, [user]);
 
   const handleSaveProfile = () => {
     Alert.alert('Success', 'Profile updated successfully!');

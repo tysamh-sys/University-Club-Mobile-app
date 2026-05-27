@@ -34,14 +34,27 @@ export default function NotificationsScreen() {
   const fetchNotifications = async () => {
     try {
       const res = await api.get('/problems/notifications');
-      const mapped = res.data.notifications.map((n: any) => ({
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        type: n.title.toLowerCase().includes('admin') ? 'message' : 'system',
-        read: n.is_read,
-        time: new Date(n.created_at).toLocaleDateString()
-      }));
+      const mapped = res.data.notifications.map((n: any) => {
+        let type: 'event' | 'message' | 'security' | 'system' = 'system';
+        const titleLower = n.title.toLowerCase();
+        
+        if (titleLower.includes('security') || titleLower.includes('block') || titleLower.includes('ban')) {
+          type = 'security';
+        } else if (titleLower.includes('event') || titleLower.includes('participation') || titleLower.includes('join')) {
+          type = 'event';
+        } else if (titleLower.includes('feedback') || titleLower.includes('ticket') || titleLower.includes('replied')) {
+          type = 'message';
+        }
+
+        return {
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          type,
+          read: n.is_read,
+          time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+        };
+      });
       setNotifications(mapped);
     } catch (err) {
       console.error('Failed to load notifications', err);

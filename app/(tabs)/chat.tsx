@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,16 +8,28 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, Send, ArrowLeft } from 'lucide-react-native';
+import { Search, Send, ArrowLeft, MoreVertical, ShieldCheck, Clock, Check, CheckCheck } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/context/ThemeContext';
-import Animated, { FadeInUp, FadeInRight, Layout } from 'react-native-reanimated';
+import Animated, { 
+  FadeInUp, 
+  FadeInRight, 
+  FadeIn,
+  Layout, 
+  SlideInRight,
+  SlideOutLeft
+} from 'react-native-reanimated';
 
 import api from '@/services/api';
 import { initCrypto, encryptMessage, decryptMessage } from '@/services/cryptoService';
 import { useAuth } from '@/context/AuthContext';
+
+const { width } = Dimensions.get('window');
 
 interface User {
   id: number;
@@ -29,7 +41,7 @@ interface User {
   timestamp?: string;
   online?: boolean;
   avatar?: string;
-  color?: string[];
+  color: [string, string];
 }
 
 interface Message {
@@ -37,34 +49,39 @@ interface Message {
   text: string;
   sender: 'me' | 'them';
   timestamp: string;
+  status: 'sent' | 'delivered' | 'read';
 }
 
-const colors = [
+const AVATAR_COLORS: [string, string][] = [
   ['#FF3366', '#FF6B6B'],
   ['#4facfe', '#00f2fe'],
   ['#667eea', '#764ba2'],
   ['#f093fb', '#f5576c'],
-  ['#43e97b', '#38f9d7']
+  ['#43e97b', '#38f9d7'],
+  ['#fa709a', '#fee140'],
 ];
 
 export default function ChatScreen() {
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const scrollViewRef = useRef<ScrollView>(null);
+
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageText, setMessageText] = useState('');
-  const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [myPublicKey, setMyPublicKey] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setupChat();
   }, []);
 
   const setupChat = async () => {
     try {
-      const keys = await initCrypto();
-      setMyPublicKey(keys.publicKey);
+      await initCrypto();
       fetchUsers();
     } catch (err) {
       console.error('Failed to init crypto:', err);
@@ -77,27 +94,34 @@ export default function ChatScreen() {
       const mapped = res.data.users.map((u: any, idx: number) => ({
         ...u,
         avatar: u.name.substring(0, 2).toUpperCase(),
-        color: colors[idx % colors.length],
-        online: Math.random() > 0.5,
-        timestamp: '',
-        lastMessage: u.public_key ? 'Ready to chat securely' : 'User not ready'
+        color: AVATAR_COLORS[idx % AVATAR_COLORS.length],
+        online: Math.random() > 0.3,
+        timestamp: 'Active now',
+        lastMessage: u.public_key ? '🔒 Secure connection ready' : 'Waiting for setup...'
       }));
       setUsers(mapped);
     } catch (err) {
       console.error('Failed to load chat users', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedUser) {
+      setMessages([]); // Clear messages immediately when switching user
+      setMessagesLoading(true);
       loadMessages();
-      const interval = setInterval(loadMessages, 5000);
+      const interval = setInterval(loadMessages, 4000);
       return () => clearInterval(interval);
     }
-  }, [selectedUser]);
+  }, [selectedUser?.id]);
 
   const loadMessages = async () => {
-    if (!selectedUser || !selectedUser.public_key) return;
+    if (!selectedUser || !selectedUser.public_key) {
+      setMessagesLoading(false);
+      return;
+    }
     try {
       const res = await api.get(`/chat/messages/${selectedUser.id}`);
       const rawMessages = res.data.messages || [];
@@ -105,43 +129,45 @@ export default function ChatScreen() {
       const decryptedMessages: Message[] = [];
       for (const msg of rawMessages) {
         try {
-          const senderPubKey = msg.sender_id === user?.id ? selectedUser.public_key : selectedUser.public_key;
-          // Wait, actually if I am the sender, I encrypt with THEIR public key, but I CANNOT decrypt it later with my private key + their public key unless I decrypt it as the sender?
-          // No, nacl.box decrypt uses (senderPubKey, mySecretKey).
-          // If I sent the message, it was encrypted with (mySecretKey, theirPubKey). 
-          // Wait, Box is symmetric in keys! nacl.box.open(..., nonce, theirPubKey, mySecretKey) works to decrypt messages sent BY me to THEM!
-          
           const text = await decryptMessage(msg.encrypted_message, msg.nonce, selectedUser.public_key);
           decryptedMessages.push({
             id: msg.id,
             text,
             sender: msg.sender_id === user?.id ? 'me' : 'them',
-            timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'read'
           });
         } catch (e) {
           decryptedMessages.push({
             id: msg.id,
             text: '🔒 [Decryption failed]',
             sender: msg.sender_id === user?.id ? 'me' : 'them',
-            timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'read'
           });
         }
       }
       setMessages(decryptedMessages);
     } catch (err) {
       console.error('Failed to load messages', err);
+    } finally {
+      setMessagesLoading(false);
     }
   };
 
-  const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   const sendMessage = async () => {
-    if (!messageText.trim() || !selectedUser || !selectedUser.public_key) return;
+    if (!messageText.trim() || !selectedUser) return;
+    
+    if (!selectedUser.public_key) {
+      Alert.alert('E2EE Security', 'The recipient has not set up their encryption keys yet.');
+      return;
+    }
+
+    const currentText = messageText;
+    setMessageText('');
+
     try {
-      const { encryptedMessage, nonce } = await encryptMessage(messageText, selectedUser.public_key);
-      
+      const { encryptedMessage, nonce } = await encryptMessage(currentText, selectedUser.public_key);
       const res = await api.post('/chat/message', {
         receiverId: selectedUser.id,
         encryptedMessage,
@@ -150,105 +176,141 @@ export default function ChatScreen() {
 
       const newMessage: Message = {
         id: res.data.data.id,
-        text: messageText,
+        text: currentText,
         sender: 'me',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent'
       };
-      setMessages([...messages, newMessage]);
-      setMessageText('');
+      setMessages(prev => [...prev, newMessage]);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
       console.error('Failed to send message', err);
+      Alert.alert('Transmission Error', 'Your message could not be sent. Please check your connection.');
+      setMessageText(currentText); // Restore text on failure
     }
   };
+
+  const filteredUsers = users.filter(u =>
+    u.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   if (selectedUser) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={[styles.chatHeader, { borderBottomColor: theme.border, paddingTop: insets.top }]}>
-          <TouchableOpacity onPress={() => setSelectedUser(null)} style={styles.backButton}>
+        {/* Chat Header */}
+        <LinearGradient
+          colors={isDarkMode ? ['#1e1b4b', '#020617'] : ['#f1f5f9', '#ffffff']}
+          style={[styles.chatHeader, { paddingTop: insets.top }]}
+        >
+          <TouchableOpacity onPress={() => setSelectedUser(null)} style={styles.iconBtn}>
             <ArrowLeft size={24} color={theme.text} />
           </TouchableOpacity>
 
-          <View style={styles.avatarContainer}>
+          <View style={styles.headerProfile}>
             <LinearGradient
               colors={selectedUser.color}
-              style={styles.avatarSmall}
+              style={styles.avatarMini}
             >
-              <Text style={styles.avatarTextSmall}>{selectedUser.avatar}</Text>
+              <Text style={styles.avatarMiniText}>{selectedUser.avatar}</Text>
             </LinearGradient>
-            {selectedUser.online && <View style={[styles.onlineDotSmall, { borderColor: theme.background }]} />}
+            <View>
+              <Text style={[styles.headerName, { color: theme.text }]}>{selectedUser.name}</Text>
+              <View style={styles.statusRow}>
+                <View style={[styles.statusDot, { backgroundColor: selectedUser.online ? '#10b981' : '#94a3b8' }]} />
+                <Text style={[styles.statusText, { color: theme.subtext }]}>
+                  {selectedUser.online ? 'Online' : 'Offline'}
+                </Text>
+              </View>
+            </View>
           </View>
 
-          <View style={styles.headerInfo}>
-            <Text style={[styles.headerName, { color: theme.text }]}>{selectedUser.name}</Text>
-            <Text style={[styles.headerStatus, { color: theme.subtext }]}>{selectedUser.online ? 'Online' : 'Offline'}</Text>
-          </View>
-        </View>
+          <TouchableOpacity style={styles.iconBtn}>
+            <MoreVertical size={24} color={theme.text} />
+          </TouchableOpacity>
+        </LinearGradient>
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
-          <ScrollView 
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.messagesList} 
-            showsVerticalScrollIndicator={false}
-          >
-            {messages.map((message, index) => (
-              <Animated.View 
-                key={message.id} 
-                entering={FadeInUp.delay(index * 50)}
-                style={[
-                  styles.messageWrapper,
-                  message.sender === 'me' ? styles.myMessageWrapper : styles.theirMessageWrapper
-                ]}
+          <View style={{ flex: 1 }}>
+            {messagesLoading && messages.length === 0 ? (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator color={theme.primary} />
+              </View>
+            ) : (
+              <ScrollView 
+                ref={scrollViewRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.messagesContainer}
+                onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
               >
-                <View style={[
-                  styles.messageBubble,
-                  message.sender === 'me' ? styles.myMessageBubble : [styles.theirMessageBubble, { backgroundColor: theme.input, borderColor: theme.border }]
-                ]}>
-                  {message.sender === 'me' ? (
-                    <LinearGradient
-                      colors={['#030213', '#717182']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.gradientBubble}
-                    >
-                      <Text style={styles.myMessageText}>{message.text}</Text>
-                    </LinearGradient>
-                  ) : (
-                    <Text style={[styles.theirMessageText, { color: theme.text }]}>{message.text}</Text>
-                  )}
-                </View>
-                <Text style={[styles.timestamp, { color: theme.subtext }]}>{message.timestamp}</Text>
-              </Animated.View>
-            ))}
-          </ScrollView>
+              <View style={styles.securityBanner}>
+                <ShieldCheck size={14} color={theme.subtext} />
+                <Text style={[styles.securityText, { color: theme.subtext }]}>
+                  Messages are end-to-end encrypted.
+                </Text>
+              </View>
 
-          <View style={[
-            styles.inputArea, 
-            { 
-              backgroundColor: theme.card, 
-              borderTopColor: theme.border,
-              paddingBottom: insets.bottom + 12
-            }
-          ]}>
-            <View style={[styles.inputContainer, { backgroundColor: theme.input }]}>
+              {messages.map((msg, idx) => (
+                <Animated.View 
+                  key={msg.id || idx}
+                  entering={FadeInUp.delay(50)}
+                  style={[
+                    styles.messageWrapper,
+                    msg.sender === 'me' ? styles.myMessageWrapper : styles.theirMessageWrapper
+                  ]}
+                >
+                  <View style={[
+                    styles.bubble,
+                    msg.sender === 'me' ? [styles.myBubble, { backgroundColor: theme.primary }] : [styles.theirBubble, { backgroundColor: theme.card, borderColor: theme.border }]
+                  ]}>
+                    <Text style={[
+                      styles.messageText,
+                      { color: msg.sender === 'me' ? '#ffffff' : theme.text }
+                    ]}>
+                      {msg.text}
+                    </Text>
+                    <View style={styles.messageFooter}>
+                      <Text style={[
+                        styles.msgTimestamp,
+                        { color: msg.sender === 'me' ? 'rgba(255,255,255,0.7)' : theme.subtext }
+                      ]}>
+                        {msg.timestamp}
+                      </Text>
+                      {msg.sender === 'me' && (
+                        <CheckCheck size={14} color="rgba(255,255,255,0.8)" />
+                      )}
+                    </View>
+                  </View>
+                </Animated.View>
+              ))}
+            </ScrollView>
+          )}
+          </View>
+
+          {/* Input Area */}
+          <View style={[styles.inputArea, { backgroundColor: theme.card, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
+            <View style={[styles.inputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
               <TextInput
                 style={[styles.input, { color: theme.text }]}
                 value={messageText}
                 onChangeText={setMessageText}
-                placeholder="Type a message..."
+                placeholder="Type your message..."
                 placeholderTextColor={theme.subtext}
                 multiline
               />
-              <TouchableOpacity onPress={sendMessage} disabled={!messageText.trim()}>
+              <TouchableOpacity 
+                onPress={sendMessage} 
+                disabled={!messageText.trim()}
+                style={[styles.sendBtn, !messageText.trim() && { opacity: 0.5 }]}
+              >
                 <LinearGradient
-                  colors={['#030213', '#4a4a5a']}
-                  style={styles.sendButton}
+                  colors={[theme.primary, '#4f46e5']}
+                  style={styles.sendGradient}
                 >
-                  <Send size={18} color="#ffffff" />
+                  <Send size={20} color="#ffffff" />
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -259,59 +321,75 @@ export default function ChatScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>Messages</Text>
-        <Text style={[styles.subtitle, { color: theme.subtext }]}>Connect with your club members</Text>
+        <View>
+          <Text style={[styles.title, { color: theme.text }]}>Messages</Text>
+          <Text style={[styles.subtitle, { color: theme.subtext }]}>Secure Club Communication</Text>
+        </View>
       </View>
 
-      <View style={styles.searchContainer}>
-        <View style={[styles.searchInputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
+      <View style={styles.searchSection}>
+        <View style={[styles.searchBar, { backgroundColor: theme.input, borderColor: theme.border }]}>
           <Search size={20} color={theme.subtext} />
           <TextInput
             style={[styles.searchInput, { color: theme.text }]}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search users..."
+            placeholder="Search members..."
             placeholderTextColor={theme.subtext}
           />
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.usersList} showsVerticalScrollIndicator={false}>
-        {filteredUsers.map((user, index) => (
-          <Animated.View 
-            key={user.id} 
-            entering={FadeInRight.delay(index * 100)}
-            layout={Layout.springify()}
-          >
-            <TouchableOpacity
-              onPress={() => setSelectedUser(user)}
-              activeOpacity={0.7}
-              style={[styles.userCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-            >
-              <View style={styles.avatarContainer}>
-                <LinearGradient
-                  colors={user.color}
-                  style={styles.avatarLarge}
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.userList}>
+          {filteredUsers.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={{ color: theme.subtext }}>No members found</Text>
+            </View>
+          ) : (
+            filteredUsers.map((item, idx) => (
+              <Animated.View 
+                key={item.id} 
+                entering={FadeInRight.delay(idx * 100)}
+                layout={Layout.springify()}
+              >
+                <TouchableOpacity
+                  onPress={() => setSelectedUser(item)}
+                  style={[styles.userCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.avatarTextLarge}>{user.avatar}</Text>
-                </LinearGradient>
-                {user.online && <View style={[styles.onlineDotLarge, { borderColor: theme.card }]} />}
-              </View>
+                  <View style={styles.avatarWrapper}>
+                    <LinearGradient
+                      colors={item.color}
+                      style={styles.avatarLarge}
+                    >
+                      <Text style={styles.avatarTextLarge}>{item.avatar}</Text>
+                    </LinearGradient>
+                    {item.online && <View style={styles.onlineIndicator} />}
+                  </View>
 
-              <View style={styles.userCardContent}>
-                <View style={styles.userNameRow}>
-                  <Text style={[styles.userName, { color: theme.text }]}>{user.name}</Text>
-                  <Text style={[styles.userTimestamp, { color: theme.subtext }]}>{user.timestamp}</Text>
-                </View>
-                <Text style={[styles.lastMessage, { color: theme.subtext }]} numberOfLines={1}>{user.lastMessage}</Text>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-        ))}
-      </ScrollView>
-    </View>
+                  <View style={styles.userCardInfo}>
+                    <View style={styles.userCardTop}>
+                      <Text style={[styles.userName, { color: theme.text }]}>{item.name}</Text>
+                      <Text style={[styles.timeLabel, { color: theme.subtext }]}>{item.timestamp}</Text>
+                    </View>
+                    <Text style={[styles.previewText, { color: theme.subtext }]} numberOfLines={1}>
+                      {item.lastMessage}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            ))
+          )}
+        </ScrollView>
+      )}
+    </SafeAreaView>
   );
 }
 
@@ -321,23 +399,22 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingVertical: 16,
   },
   title: {
-    fontSize: 34,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '900',
     letterSpacing: -1,
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '500',
   },
-  searchContainer: {
+  searchSection: {
     paddingHorizontal: 24,
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  searchInputWrapper: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 20,
@@ -351,7 +428,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  usersList: {
+  userList: {
     paddingHorizontal: 24,
     paddingBottom: 40,
     gap: 12,
@@ -360,7 +437,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 24,
-    padding: 14,
+    padding: 12,
     borderWidth: 1,
     gap: 16,
     shadowColor: '#000',
@@ -369,161 +446,186 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
-  avatarContainer: {
+  avatarWrapper: {
     position: 'relative',
   },
   avatarLarge: {
-    width: 60,
-    height: 60,
-    borderRadius: 22,
+    width: 64,
+    height: 64,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarTextLarge: {
     color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
   },
-  onlineDotLarge: {
+  onlineIndicator: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#00ff88',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#10b981',
     borderWidth: 3,
+    borderColor: '#ffffff',
   },
-  userCardContent: {
+  userCardInfo: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
-  userNameRow: {
+  userCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   userName: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
   },
-  lastMessage: {
+  timeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  previewText: {
     fontSize: 14,
     fontWeight: '500',
   },
-  userTimestamp: {
-    fontSize: 12,
-    fontWeight: '600',
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
   },
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 16,
+    gap: 12,
     borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  iconBtn: {
+    padding: 8,
+    borderRadius: 12,
+  },
+  headerProfile: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
-  backButton: {
-    padding: 8,
-  },
-  avatarSmall: {
+  avatarMini: {
     width: 44,
     height: 44,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarTextSmall: {
+  avatarMiniText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
-  },
-  onlineDotSmall: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#00ff88',
-    borderWidth: 2,
-  },
-  headerInfo: {
-    flex: 1,
-    justifyContent: 'center',
   },
   headerName: {
     fontSize: 17,
     fontWeight: '700',
   },
-  headerStatus: {
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  messagesList: {
+  messagesContainer: {
     padding: 20,
-    gap: 16,
+    paddingTop: 10,
+    gap: 12,
+  },
+  securityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    padding: 8,
+    borderRadius: 12,
+  },
+  securityText: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   messageWrapper: {
     maxWidth: '85%',
   },
   myMessageWrapper: {
     alignSelf: 'flex-end',
-    alignItems: 'flex-end',
   },
   theirMessageWrapper: {
     alignSelf: 'flex-start',
-    alignItems: 'flex-start',
   },
-  messageBubble: {
-    borderRadius: 22,
-    overflow: 'hidden',
+  bubble: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
-  myMessageBubble: {
+  myBubble: {
     borderBottomRightRadius: 4,
   },
-  theirMessageBubble: {
+  theirBubble: {
     borderBottomLeftRadius: 4,
-    padding: 14,
     borderWidth: 1,
   },
-  gradientBubble: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-  },
-  myMessageText: {
-    color: '#ffffff',
+  messageText: {
     fontSize: 16,
     fontWeight: '500',
     lineHeight: 22,
   },
-  theirMessageText: {
-    fontSize: 16,
-    fontWeight: '500',
-    lineHeight: 22,
-  },
-  timestamp: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 6,
-    marginHorizontal: 8,
-  },
-  inputArea: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-  },
-  inputContainer: {
+  messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 28,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    justifyContent: 'flex-end',
+    marginTop: 4,
+    gap: 4,
+  },
+  msgTimestamp: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  inputArea: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 30,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    borderWidth: 1,
     gap: 8,
   },
   input: {
@@ -533,10 +635,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     maxHeight: 120,
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  sendBtn: {
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  sendGradient: {
+    width: 48,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
   },

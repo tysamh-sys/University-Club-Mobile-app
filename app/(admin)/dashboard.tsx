@@ -176,7 +176,7 @@ export default function AdminDashboard() {
           feedback: unresolved.length,
         }));
         
-        let notifs = [];
+        let notifs: any[] = [];
         if (movesRes.data && movesRes.data.length > 0) {
             const formattedLogs = movesRes.data.slice(0, 5).map((log: any) => 
                `[${new Date(log.created_at).toLocaleTimeString()}] ${log.action} - IP: ${log.ip || 'Unknown'}`
@@ -210,7 +210,7 @@ export default function AdminDashboard() {
         });
         setDynamicNotifications(notifs);
 
-        let acts = [];
+        let acts: any[] = [];
         const users = Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data?.users || []);
         const recentUsers = [...users].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 3);
         recentUsers.forEach((u: any, idx: number) => {

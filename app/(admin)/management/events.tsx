@@ -136,9 +136,30 @@ export default function EventManagement() {
     ]);
   };
 
+  const openRequests = async (event: Event) => {
+    try {
+      const res = await api.get(`/events/${event.id}/requests`);
+      const mappedRequests: ParticipationRequest[] = res.data.requests.map((r: any) => ({
+        id: r.request_id.toString(),
+        userName: r.user_name,
+        userEmail: r.user_email,
+        status: r.status,
+        timestamp: new Date(r.created_at).toLocaleString()
+      }));
+      
+      const updatedEvent = { ...event, requests: mappedRequests };
+      setEvents(events.map(e => e.id === event.id ? updatedEvent : e));
+      setViewingRequests(updatedEvent);
+    } catch (err) {
+      console.error('Error fetching event requests:', err);
+      Alert.alert('Error', 'Could not load participation requests.');
+    }
+  };
+
   const handleRequest = async (eventId: string, requestId: string, status: 'accepted' | 'rejected') => {
     try {
-      await api.put(`/events/requests/${requestId}/${status}`);
+      const action = status === 'accepted' ? 'approve' : 'reject';
+      await api.put(`/events/requests/${requestId}/${action}`);
       setEvents(events.map(e => {
         if (e.id === eventId) {
           return {
@@ -195,7 +216,7 @@ export default function EventManagement() {
               </View>
               <View style={styles.cardActions}>
                 <TouchableOpacity 
-                  onPress={() => setViewingRequests(event)} 
+                  onPress={() => openRequests(event)} 
                   style={[styles.actionButton, { backgroundColor: theme.input }]}
                 >
                   <ClipboardList size={18} color={theme.primary} />

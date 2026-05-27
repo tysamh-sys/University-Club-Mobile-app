@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   Dimensions,
   Platform,
+  Alert,
 } from 'react-native';
 import { Calendar, MapPin, Users, Star, Bell, ChevronRight, Activity } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import Animated, { 
   FadeInUp, 
   FadeInRight, 
@@ -30,7 +32,7 @@ const { width } = Dimensions.get('window');
 import api from '@/services/api';
 
 interface Event {
-  _id: string;
+  id: number;
   title: string;
   date: string;
   time?: string;
@@ -64,8 +66,12 @@ export default function HomeScreen() {
 
   const fetchEvents = async () => {
     try {
-      const res = await api.get('/events');
-      setEvents(res.data.events || []);
+      const [eventsRes, requestsRes] = await Promise.all([
+        api.get('/events'),
+        api.get('/events/my-requests')
+      ]);
+      setEvents(eventsRes.data.events || []);
+      setRequestedEvents((requestsRes.data.requests || []).map(String));
     } catch (err) {
       console.error('Error fetching events:', err);
     } finally {
@@ -73,12 +79,23 @@ export default function HomeScreen() {
     }
   };
 
-  const handleRequest = async (eventId: string) => {
+  const handleRequest = async (eventId: any) => {
     try {
-      await api.post(`/events/${eventId}/request-participation`);
+      console.log('Requesting participation for event:', eventId);
+      const res = await api.post(`/events/${eventId}/request-participation`);
       setRequestedEvents([...requestedEvents, eventId]);
-    } catch (err) {
+      Alert.alert('Success', 'Your request has been sent to the admin.');
+    } catch (err: any) {
       console.error('Error requesting participation:', err);
+      const status = err.response?.status;
+      const data = err.response?.data;
+      const errorMsg = data?.message || err.message;
+      const detail = data?.detail || data?.error || '';
+      
+      Alert.alert(
+        'Request Failed',
+        `Status: ${status}\nMessage: ${errorMsg}\n\nDetail: ${detail}`
+      );
     }
   };
 
@@ -120,7 +137,10 @@ export default function HomeScreen() {
             <Text style={[styles.welcomeText, { color: theme.subtext }]}>Hello, {user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'Member'}</Text>
             <Text style={[styles.title, { color: theme.text }]}>VITAL Experience</Text>
           </View>
-          <TouchableOpacity style={[styles.notificationBtn, { backgroundColor: theme.input }]}>
+          <TouchableOpacity 
+            style={[styles.notificationBtn, { backgroundColor: theme.input }]}
+            onPress={() => router.push('/notifications' as any)}
+          >
             <Bell size={24} color={theme.text} />
             <View style={[styles.badge, { borderColor: theme.input }]} />
           </TouchableOpacity>
@@ -195,7 +215,7 @@ export default function HomeScreen() {
             .filter(e => activeCategory === 'All' || e.category === activeCategory)
             .map((event, index) => (
             <Animated.View 
-              key={event._id} 
+              key={String(event.id) || index.toString()} 
               entering={FadeInUp.delay(700 + index * 150)}
               layout={Layout.springify()}
               style={[styles.eventCard, { backgroundColor: theme.card, borderColor: theme.border }]}
@@ -224,17 +244,17 @@ export default function HomeScreen() {
                 <View style={styles.eventFooter}>
                   <View style={styles.participants}>
                     <Users size={16} color={theme.subtext} />
-                    <Text style={[styles.participantText, { color: theme.subtext }]}>{event.participants} joined</Text>
+                    <Text style={[styles.participantText, { color: theme.subtext }]}>{event.participants || 0} joined</Text>
                   </View>
                   
-                  {requestedEvents.includes(event._id) ? (
+                  {requestedEvents.includes(String(event.id)) ? (
                     <View style={[styles.pendingBadge, { backgroundColor: theme.accent + '15', borderColor: theme.accent }]}>
                       <Text style={[styles.pendingText, { color: theme.accent, fontWeight: '700' }]}>En attente</Text>
                     </View>
                   ) : (
                     <TouchableOpacity 
                       style={[styles.requestBtn, { backgroundColor: theme.primary }]}
-                      onPress={() => handleRequest(event._id)}
+                      onPress={() => handleRequest(event.id)}
                       activeOpacity={0.7}
                     >
                       <Text style={[styles.requestBtnText, { color: '#ffffff' }]}>Demande</Text>

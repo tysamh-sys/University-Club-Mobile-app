@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Eye, EyeOff, Mail, Lock, User, Briefcase, Globe, ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import Animated, { FadeInUp, FadeInDown, FadeIn } from 'react-native-reanimated';
@@ -32,11 +33,17 @@ export default function LoginScreen() {
     department: '',
     email: '',
     password: '',
+    confirmPassword: '',
   });
 
   const handleSubmit = async () => {
     if (!formData.email || !formData.password) {
       Alert.alert('Error', 'Please enter both email and password.');
+      return;
+    }
+
+    if (activeTab === 'signup' && formData.password !== formData.confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match.');
       return;
     }
     setLoading(true);
@@ -76,12 +83,11 @@ export default function LoginScreen() {
           >
             <Animated.View entering={FadeInDown.delay(200)} style={styles.header}>
               <View style={styles.logoWrapper}>
-                <LinearGradient
-                  colors={[theme.primary, '#4f46e5']}
-                  style={styles.logoGradient}
-                >
-                  <Text style={styles.logoLetter}>V</Text>
-                </LinearGradient>
+                <Image
+                  source={require('@/assets/images/icon.png')}
+                  style={styles.mainIcon}
+                  contentFit="contain"
+                />
                 <Text style={[styles.logoText, { color: theme.text }]}>VITAL<Text style={{ color: theme.primary }}>CORE</Text></Text>
               </View>
               <Text style={[styles.subtitle, { color: theme.subtext }]}>L'Intelligence Motrice du Club</Text>
@@ -189,6 +195,23 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
+                {activeTab === 'signup' && (
+                  <Animated.View entering={FadeIn.duration(400)} style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: theme.text }]}>Confirm Password</Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
+                      <Lock size={20} color={theme.subtext} />
+                      <TextInput
+                        style={[styles.input, { color: theme.text }]}
+                        placeholder="••••••••"
+                        placeholderTextColor={theme.subtext}
+                        secureTextEntry={!showPassword}
+                        value={formData.confirmPassword}
+                        onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
+                      />
+                    </View>
+                  </Animated.View>
+                )}
+
                 <TouchableOpacity 
                   onPress={handleSubmit}
                   activeOpacity={0.8}
@@ -267,20 +290,13 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 6,
   },
-  logoGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoLetter: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '900',
+  mainIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
   },
   logoText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
     letterSpacing: -1,
   },

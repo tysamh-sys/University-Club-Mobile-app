@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 import nacl from 'tweetnacl';
 import naclUtil from 'tweetnacl-util';
 import * as SecureStore from 'expo-secure-store';
