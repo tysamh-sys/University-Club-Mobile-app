@@ -1,50 +1,193 @@
-# Welcome to your Expo app 👋
+# Club Management Mobile App 🚀
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A modern mobile application built with React Native and Expo during a **24-hour hackathon** ⏱️.
 
-## Get started
+This application is designed to help university clubs manage their activities, archives, sponsors, members, and internal workflow through a smart and modern mobile experience.
 
-1. Install dependencies
+The project combines:
+- Club management tools
+- AI-powered assistants
+- Secure encrypted storage
+- Event organization
+- Real-time communication
+- Modern authentication systems
 
-   ```bash
-   npm install
-   ```
+---
 
-2. Start the app
+# 📱 About The Project
 
-   ```bash
-   npx expo start
-   ```
+This application is not just an event platform.
 
-In the output, you'll find options to open the app in a
+It is a complete **digital assistant for university clubs** that simplifies organization, communication, archive management, sponsor handling, and content creation.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+The app provides two main spaces:
+- User Space 👤
+- Admin Space 🛠️
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+# ✨ Main Features
 
-When you're ready, run:
+# 👤 User Space
 
-```bash
-npm run reset-project
-```
+## 📅 Events Access
+Users can:
+- Browse club events
+- Join events easily
+- Receive event updates
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-## Learn more
+## 💬 Feedback & Communication
+Users can send:
+- Feedback
+- Suggestions
+- Problem reports
 
-To learn more about developing your project with Expo, look at the following resources:
+Messages are delivered instantly to administrators, and admins can reply directly.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+---
 
-## Join the community
+## 🔔 Push Notifications
+The application supports real-time mobile notifications for:
+- Event announcements
+- Important updates
+- Admin responses
+- Club activities
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 👤 Profile Management
+Users can edit their:
+- Name
+- Email
+- Personal information
+
+---
+
+## 🔐 Authentication
+The application supports modern authentication features including:
+- Continue with Google
+- Secure login system
+- Biometric authentication
+
+---
+
+# 🛠️ Admin Space
+
+The admin area contains advanced tools to help club members organize and manage everything efficiently.
+
+---
+
+## 📊 Dashboard
+A complete dashboard providing quick access to:
+- Statistics
+- Members
+- Events
+- Sponsors
+- Notifications
+- Reports
+
+---
+
+## ⚙️ Management System
+
+### 👥 User Management
+Admins can:
+- Manage members
+- Edit user information
+- Remove users
+- Monitor activities
+
+---
+
+### 🎉 Event Management
+Admins can:
+- Create events
+- Edit events
+- Delete events
+- Organize schedules
+
+---
+
+### 🤝 Sponsor Management
+Admins can:
+- Add sponsors
+- Edit sponsor information
+- Remove sponsors
+- Organize partnerships
+
+---
+
+# 🗂️ Smart Archive System
+
+The app includes a powerful archive management system for storing and organizing club data and history.
+
+Admins can easily access archived information whenever needed.
+
+---
+
+# 🤖 AI Archive Assistant
+
+Inside the archive section, an AI assistant helps administrators search through archived data intelligently.
+
+The AI works similarly to ChatGPT and can:
+- Search archive records
+- Answer archive-related questions
+- Find information quickly
+- Improve productivity
+
+---
+
+# 🎨 AI Designer Assistant
+
+The application also includes an AI-powered designer assistant.
+
+Admins can describe their event idea, and the AI generates:
+- Email content
+- Instagram captions
+- Design ideas
+- Poster color suggestions
+- Marketing inspiration
+
+This helps clubs prepare professional communication content faster.
+
+---
+
+# 🔐 Secure Vault
+
+The application contains a secure encrypted vault system for storing important club files and sensitive documents.
+
+Features include:
+- Encrypted file storage
+- Secure access
+- Biometric unlocking using fingerprint authentication
+
+In some cases, users can unlock the vault using fingerprint authentication instead of passwords.
+
+---
+
+# 🧰 Technologies Used
+
+- React Native
+- Expo
+- JavaScript
+- Firebase / Backend Services
+- Push Notifications
+- Google Authentication
+- Biometric Authentication
+- Secure Storage
+- AI Integration
+
+---
+
+# ⚡ Hackathon Project
+
+This project was fully designed and developed during a **24-hour hackathon**.
+
+The main goal was to create a smart assistant platform that helps university clubs manage their workflow digitally in a modern and efficient way.
+
+---
+
+# 📸 Screenshots
+
