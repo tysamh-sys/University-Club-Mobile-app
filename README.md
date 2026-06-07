@@ -1,3 +1,4 @@
+
 # Club Management Mobile App 🚀
 
 A modern mobile application built with React Native and Expo during a **24-hour hackathon** ⏱️.
@@ -191,3 +192,7 @@ The main goal was to create a smart assistant platform that helps university clu
 
 # 📸 Screenshots
 
+<img width="720" height="1640" alt="Screenshot_2026-05-26-15-16-45-114_com vital app" src="https://github.com/user-attachments/assets/2be58b7b-b59d-4f0b-a88a-2ec8f5c87cc8" />
+<img width="720" height="1640" alt="Screenshot_2026-05-26-15-14-42-444_com vital app" src="https://github.com/user-attachments/assets/9453982a-ba74-49ae-b3b9-a54a0147efbc" />
+<img width="720" height="1640" alt="Screenshot_2026-05-26-15-14-34-506_com vital app" src="https://github.com/user-attachments/assets/44958fbf-a075-4622-aeb0-42105298e307" />
+<img width="720" height="1640" alt="Screenshot_2026-05-26-15-00-58-985_com vital app" src="https://github.com/user-attachments/assets/ed19980d-88ee-4b95-b0c0-619c7435cb9a" />
